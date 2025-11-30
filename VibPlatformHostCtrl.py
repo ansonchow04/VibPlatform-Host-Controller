@@ -1,5 +1,6 @@
 import socket
 import time
+from enum import Enum
 
 # set target device IP address and port number
 HOST = "192.168.60.69"
@@ -10,25 +11,186 @@ classes for different components
 """
 
 
+# 振动平台动作枚举
+class ACTION(Enum):
+    UP = "10"
+    DOWN = "11"
+    LEFT = "12"
+    RIGHT = "13"
+    LEFT_UP = "14"
+    RIGHT_UP = "15"
+    LEFT_DOWN = "16"
+    RIGHT_DOWN = "18"
+    GATHER = "17"
+    CENTER_VERTICAL = "19"
+    CENTER_HORIZONTAL = "1A"
+    DISPERSE = "1B"
+    FLIP = "1C"
+    NONE = "1F"
+
+
+# 柔性振动平台
 class platform:
-    START = "00 00 00 00 00 06 02 06 00 08 FF 00"
+    START = "00 00 00 00 00 06 02 06 00 0F 00 "  # 动作代码待后续补充
     STOP = "00 00 00 00 00 06 02 06 00 08 00 00"
 
     def __init__(self, sender):
         self._send = sender
 
-    def start(self):
-        self._send(self.START)
+    def set_special_action_time(  # [垂直居中、水平居中、振散、翻转]动作的[电压、频率、时间]设置
+        self,
+        action: ACTION,
+        voltage: float = 10.0,
+        frequency: float = 60.0,
+        time_sec: float = 20.0,
+    ):
+        if (
+            not 0 <= voltage <= 24
+            or not 10 <= frequency <= 200
+            or not 0 <= time_sec <= 20
+        ):
+            print(
+                "Voltage must be between 0 and 24, frequency must be between 10 and 200, and time value must be between 0 and 20 seconds."
+            )
+            return
+        voltage = int(voltage * 10)  # 转换为0.1V为单位
+        frequency = int(frequency * 10)  # 频率以0.1Hz为单位
+        time = int(time_sec * 10)  # 转换为0.1秒为单位
+        # 计算寄存器地址
+        if action == ACTION.FLIP:
+            register_address = 52
+        elif (
+            action == ACTION.CENTER_HORIZONTAL
+            or action == ACTION.CENTER_VERTICAL
+            or action == ACTION.DISPERSE
+        ):
+            register_address = int(action.value, 16) * 3 - 35
+        else:
+            print(
+                "This method only supports FLIP, CENTER_HORIZONTAL, CENTER_VERTICAL, and DISPERSE actions."
+            )
+            return
+
+        # 设置频率
+        freq_high = (frequency >> 8) & 0xFF
+        freq_low = frequency & 0xFF
+        command = f"00 00 00 00 00 06 02 06 00 {int(register_address+0):02X} {freq_high:02X} {freq_low:02X}"
+        self._send(command)
+        # 设置电压
+        command = (
+            f"00 00 00 00 00 06 02 06 00 {int(register_address+1):02X} 00 {voltage:02X}"
+        )
+        self._send(command)
+        # 设置动作时间
+        command = (
+            f"00 00 00 00 00 06 02 06 00 {int(register_address+2):02X} 00 {time:02X}"
+        )
+        self._send(command)
+
+    def set_directional_action_time(  # [上下左右及斜向]动作的[频率、电压、时间、谐振角、谐振量]设置
+        self,
+        direction: ACTION,
+        voltage: float = 10.0,
+        frequency: float = 100.0,
+        time_sec: float = 0.0,
+        resonance_angle: float = 130.0,
+        resonance_amount: float = 0.0,
+    ):
+        if (
+            not 0 <= voltage <= 24
+            or not 0 <= frequency <= 200
+            or not 0 <= time_sec <= 20
+            or not 0 <= resonance_angle <= 359
+            or not 0 <= resonance_amount <= 100
+        ):
+            print(
+                "Voltage must be between 0 and 24, frequency must be between 0 and 200, time value must be between 0 and 20 seconds, resonance angle must be between 0 and 359, and resonance amount must be between 0 and 100."
+            )
+            return
+        voltage = int(voltage * 10)  # 转换为0.1V为单位
+        frequency = int(frequency * 10)  # 频率以0.1Hz为单位
+        time = int(time_sec * 10)  # 转换为0.1秒为单位
+        # 计算寄存器地址
+        if direction == ACTION.RIGHT_DOWN:
+            register_address = 37
+        elif (
+            direction == ACTION.GATHER
+            or direction == ACTION.FLIP
+            or direction == ACTION.CENTER_HORIZONTAL
+            or direction == ACTION.CENTER_VERTICAL
+            or direction == ACTION.DISPERSE
+            or direction == ACTION.GATHER
+        ):
+            print("This method only supports directional actions.")
+            return
+        else:
+            register_address = int(direction.value, 16) * 3 - 32
+        # 计算谐振相关寄存器地址
+        if direction == ACTION.RIGHT_DOWN:
+            register_resonance_address = 174
+        else:
+            register_resonance_address = int(direction.value, 16) * 2 + 128
+        # 设置频率
+        freq_high = (frequency >> 8) & 0xFF
+        freq_low = frequency & 0xFF
+        command = f"00 00 00 00 00 06 02 06 00 {int(register_address+0):02X} {freq_high:02X} {freq_low:02X}"
+        self._send(command)
+        # 设置电压
+        command = (
+            f"00 00 00 00 00 06 02 06 00 {int(register_address+1):02X} 00 {voltage:02X}"
+        )
+        self._send(command)
+        # 设置动作时间
+        command = (
+            f"00 00 00 00 00 06 02 06 00 {int(register_address+2):02X} 00 {time:02X}"
+        )
+        self._send(command)
+        # 设置谐振角
+        angle_high = (int(resonance_angle) >> 8) & 0xFF
+        angle_low = int(resonance_angle) & 0xFF
+        command = f"00 00 00 00 00 06 02 06 00 {int(register_resonance_address+0):02X} {angle_high:02X} {angle_low:02X}"
+        self._send(command)
+        # 设置谐振量
+        command = f"00 00 00 00 00 06 02 06 00 {int(register_resonance_address+1):02X} 00 {int(resonance_amount):02X}"
+        self._send(command)
+
+    def set_gather_time(
+        self,
+        vertical_time: float = 0.5,
+        horizontal_time: float = 0.5,
+        total_time: float = 0,
+    ):
+        if not 0 <= vertical_time <= 20 or not 0 <= horizontal_time <= 20:
+            print("Time value must be between 0 and 20 seconds.")
+            return
+        vertical_time *= 10  # 转换为0.1秒为单位
+        horizontal_time *= 10
+        total_time *= 10
+        # 设置垂直运动时间
+        command = f"00 00 00 00 00 06 02 06 00 31 00 {int(vertical_time):02X}"
+        self._send(command)
+        # 设置水平运动时间
+        command = f"00 00 00 00 00 06 02 06 00 32 00 {int(horizontal_time):02X}"
+        self._send(command)
+        # 设置总运动时间
+        command = f"00 00 00 00 00 06 02 06 00 33 00 {int(total_time):02X}"
+        self._send(command)
+
+    def start(self, action: ACTION = ACTION.NONE):
+        command = self.START + action.value
+        print(command)
+        self._send(command)
 
     def stop(self):
         self._send(self.STOP)
 
 
+# BLA 内部光源
 class lightA:
     OPEN = "00 00 00 00 00 06 02 06 00 06 FF 00"
     CLOSE = "00 00 00 00 00 06 02 06 00 06 00 00"
 
-    def __init__(self, sender):
+    def __init__(self, sender):  # 为发送函数提供接口
         self._send = sender
 
     def open(self):
@@ -50,6 +212,7 @@ class lightA:
         self._send(command)
 
 
+# BLB 外部光源
 class lightB:
     OPEN = "00 00 00 00 00 06 02 06 00 07 FF 00"
     CLOSE = "00 00 00 00 00 06 02 06 00 07 00 00"
@@ -64,6 +227,7 @@ class lightB:
         self._send(self.CLOSE)
 
 
+# 料仓
 class hopper:
     START = "00 00 00 00 00 06 02 06 00 05 FF 00"
     STOP = "00 00 00 00 00 06 02 06 00 05 00 00"
@@ -78,6 +242,7 @@ class hopper:
         self._send(self.STOP)
 
 
+# 料仓门
 class gate:
     OPEN = "00 00 00 00 00 06 02 06 00 0A FF 00"
     CLOSE = "00 00 00 00 00 06 02 06 00 0A 00 00"
@@ -92,6 +257,7 @@ class gate:
         self._send(self.CLOSE)
 
 
+# 控制板，包含以上components
 class device:
     def __init__(self, host: str = HOST, port: str = PORT):
         self.host = host
@@ -148,5 +314,12 @@ class device:
 main program
 """
 
-with device() as d:
-    d.lightA.close()
+d = device()
+d.platform.set_directional_action_time(
+    direction=ACTION.UP,
+    voltage=10.0,
+    frequency=100.0,
+    time_sec=0.0,
+    resonance_angle=130,
+    resonance_amount=0,
+)
