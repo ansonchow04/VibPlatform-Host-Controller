@@ -285,6 +285,38 @@ class gate:
     def close(self):
         self._send(self.CLOSE)
 
+    # 设置仓门开启时间
+    def set_open_time(self, time_sec: float):
+        if not 0 <= time_sec <= 9.9:
+            print("Time value must be between 0 and 9.9 seconds.")
+            return
+        time_val = int(time_sec * 10)  # 转换为0.1秒为单位
+        command = f"00 00 00 00 00 06 02 06 00 B0 00 {time_val:02X}"
+        self._send(command)
+
+    # 设置仓门绑定振动平台动作及其延迟打开时间
+    def bind_platform_action(self, action: ACTION, delay_sec: float = 0.0):
+        if not 0 <= delay_sec <= 20.0 or not action in [
+            ACTION.UP,
+            ACTION.DOWN,
+            ACTION.LEFT,
+            ACTION.RIGHT,
+            ACTION.NONE,
+        ]:
+            print(
+                "Delay time must be between 0 and 20.0 seconds, and action must be one of UP, DOWN, LEFT, RIGHT, or NONE."
+            )
+            return
+        if action == ACTION.NONE:
+            direction = 0
+        else:
+            direction = int(action.value, 16) - 15  # 转换为寄存器要求的数值
+        delay_val = int(delay_sec * 10)  # 转换为0.1秒为单位
+        command = f"00 00 00 00 00 06 02 06 00 B1 00 {direction:02X}"
+        self._send(command)
+        command = f"00 00 00 00 00 06 02 06 00 B2 00 {delay_val:02X}"
+        self._send(command)
+
 
 # 控制板，包含以上components
 class device:
@@ -344,4 +376,3 @@ main program
 """
 
 d = device()
-d.hopper.set(voltage=10, frequency=100, time=0)
