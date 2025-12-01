@@ -3,12 +3,6 @@ import time
 from enum import Enum
 
 # set target device IP address and port number
-HOST = "192.168.60.69"
-PORT = "502"
-
-"""
-classes for different components
-"""
 
 
 # 振动平台动作枚举
@@ -200,13 +194,11 @@ class lightA:
         self._send(self.CLOSE)
 
     # 亮度调节
-    def adjust_brightness(self, current_ma: float):
-        # 电流(12~2000mA)，线性映射到寄存器允许的6~999范围
-        if not 12 <= current_ma <= 2000:
-            print("Brightness level must be between 12 and 2000 (mA).")
+    def adjust_brightness(self, level: int):
+        # 亮度，线性映射到寄存器允许的6~999范围
+        if not 6 <= level <= 999:
+            print("Brightness level must be between 6 and 999.")
             return
-        level = int(round(6 + (current_ma - 12) / (2000 - 12) * (999 - 6)))
-        print(level)
         high = (level >> 8) & 0xFF
         low = level & 0xFF
         command = f"00 00 00 00 00 06 02 06 00 50 {high:02X} {low:02X}"
@@ -320,11 +312,11 @@ class gate:
 
 # 控制板，包含以上components
 class device:
-    def __init__(self, host: str = HOST, port: str = PORT):
+    def __init__(self, host: str = "", port: str = ""):
         self.host = host
         self.port = port
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect_device()
+        self.connect_device(self.host, self.port)
         sender = self.send_command
         self.platform = platform(sender)
         self.lightA = lightA(sender)
@@ -339,7 +331,7 @@ class device:
         self.close_connection()
 
     # connect to target device
-    def connect_device(self):
+    def connect_device(self, host: str = "", port: str = ""):
         try:
             self.client_socket.settimeout(5)
             print(f"Connecting to {self.host}:{self.port}...")
@@ -369,10 +361,3 @@ class device:
     def close_connection(self):
         self.client_socket.close()
         print("Socket closed.")
-
-
-"""
-main program
-"""
-
-d = device()
