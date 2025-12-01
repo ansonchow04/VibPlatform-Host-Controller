@@ -37,7 +37,7 @@ class platform:
     def __init__(self, sender):
         self._send = sender
 
-    def set_special_action_time(  # [垂直居中、水平居中、振散、翻转]动作的[电压、频率、时间]设置
+    def set_special_action(  # [垂直居中、水平居中、振散、翻转]动作的[电压、频率、时间]设置
         self,
         action: ACTION,
         voltage: float = 10.0,
@@ -87,7 +87,7 @@ class platform:
         )
         self._send(command)
 
-    def set_directional_action_time(  # [上下左右及斜向]动作的[频率、电压、时间、谐振角、谐振量]设置
+    def set_directional_action(  # [上下左右及斜向]动作的[频率、电压、时间、谐振角、谐振量]设置
         self,
         direction: ACTION,
         voltage: float = 10.0,
@@ -154,7 +154,7 @@ class platform:
         command = f"00 00 00 00 00 06 02 06 00 {int(register_resonance_address+1):02X} 00 {int(resonance_amount):02X}"
         self._send(command)
 
-    def set_gather_time(
+    def set_gather(
         self,
         vertical_time: float = 0.5,
         horizontal_time: float = 0.5,
@@ -199,6 +199,7 @@ class lightA:
     def close(self):
         self._send(self.CLOSE)
 
+    # 亮度调节
     def adjust_brightness(self, current_ma: float):
         # 电流(12~2000mA)，线性映射到寄存器允许的6~999范围
         if not 12 <= current_ma <= 2000:
@@ -210,6 +211,13 @@ class lightA:
         low = level & 0xFF
         command = f"00 00 00 00 00 06 02 06 00 50 {high:02X} {low:02X}"
         self._send(command)
+
+    # 振散、翻面后自动开启
+    def auto_open(self):
+        self._send("00 00 00 00 00 06 02 06 00 56 00 01")
+
+    def auto_open_cancel(self):
+        self._send("00 00 00 00 00 06 02 06 00 56 00 00")
 
 
 # BLB 外部光源
@@ -240,6 +248,27 @@ class hopper:
 
     def stop(self):
         self._send(self.STOP)
+
+    def set(self, voltage: float = 8.0, frequency: float = 100, time: float = 0):
+        if not 0 <= voltage <= 24 or not 20 <= frequency <= 400 or not 0 <= time <= 9.9:
+            print(
+                "Voltage must be between 0 and 24, frequency must be between 20 and 400, and time value must be between 0 and 9.9 seconds."
+            )
+            return
+        voltage = int(voltage * 10)  # 转换为0.1V为单位
+        frequency = int(frequency * 10)  # 频率以0.1Hz为单位
+        time_val = int(time * 10)  # 转换为0.1秒为单位
+        # 设置电压
+        command = f"00 00 00 00 00 06 02 06 00 C0 00 {voltage:02X}"
+        self._send(command)
+        # 设置频率
+        freq_high = (frequency >> 8) & 0xFF
+        freq_low = frequency & 0xFF
+        command = f"00 00 00 00 00 06 02 06 00 C1 {freq_high:02X} {freq_low:02X}"
+        self._send(command)
+        # 设置动作时间
+        command = f"00 00 00 00 00 06 02 06 00 C2 00 {time_val:02X}"
+        self._send(command)
 
 
 # 料仓门
@@ -315,11 +344,4 @@ main program
 """
 
 d = device()
-d.platform.set_directional_action_time(
-    direction=ACTION.UP,
-    voltage=10.0,
-    frequency=100.0,
-    time_sec=0.0,
-    resonance_angle=130,
-    resonance_amount=0,
-)
+d.hopper.set(voltage=10, frequency=100, time=0)
