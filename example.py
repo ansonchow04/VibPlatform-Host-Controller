@@ -21,7 +21,7 @@ with device(HOST, PORT) as d:
     time.sleep(2)  # 等待 2 秒观察效果
 
     # 调低亮度
-    d.lightA.adjust_brightness(30)  # 设置为 30
+    d.lightA.adjust_brightness(50)  # 设置为 30
     time.sleep(2)
 
     # 关闭内部光源
