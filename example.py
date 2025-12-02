@@ -4,7 +4,7 @@
 说明：将此文件放在项目根并从该目录运行。建议用上下文管理器（with）或在结束时显式关闭连接。
 """
 
-from HostController import device
+from device import device
 import time
 
 # 目标设备地址（请根据实际设备修改）

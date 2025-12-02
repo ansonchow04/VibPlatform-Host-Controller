@@ -316,7 +316,8 @@ class device:
         self.host = host
         self.port = port
         self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect_device(self.host, self.port)
+        # 提供异常接口
+        self.connected = self.connect_device(self.host, self.port)
         sender = self.send_command
         self.platform = platform(sender)
         self.lightA = lightA(sender)
@@ -325,6 +326,8 @@ class device:
         self.gate = gate(sender)
 
     def __enter__(self):
+        if not self.connected:
+            raise ConnectionError("Failed to connect to the device.")
         return self
 
     def __exit__(self, exc_type, exc, tb):
